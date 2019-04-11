@@ -1,0 +1,177 @@
+<meta charset="utf8">
+<!--引入CSS-->
+<link rel="stylesheet" type="text/css" href="webupload/webuploader.css">
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="jquery.md5.js"></script>
+
+<!--引入JS-->
+<script type="text/javascript" src="webupload/webuploader.js"></script>
+<div id="uploader" class="wu-example">
+    <!--用来存放文件信息-->
+    <div id="thelist" class="uploader-list"></div>
+    <div class="btns">
+        <div id="picker">选择文件</div>
+        <button id="ctlBtn" class="btn btn-default">开始上传</button>
+    </div>
+</div>
+<style>
+    .progress{
+        height: 20px; width: 300px; background: #ccc; }
+    .progress-bar{
+        height: 20px; background: #0a3536;}
+</style>
+<script>
+
+    var uploadswf = 'webupload/Uploader.swf';
+    var chunkSize = 2*1024*1024;
+    var server_url='upfile.php';
+    var GUID = WebUploader.Base.guid();//一个GUID
+    var chunkObj = {};  //用来记录文件的状态、上传中断的位置
+    var seq=1;
+    var msg='';
+    $(function () {
+        var $ = jQuery;
+        var $list = $('#thelist');
+        WebUploader.Uploader.register({
+            "before-send-file":"beforeSendFile",
+            "before-send": "beforeSend"
+        }, {
+            "beforeSendFile": function (file) {
+                //上传前校验文件是否已经上传过
+                var deferred = WebUploader.Deferred();
+                $.ajax({
+                    type:"POST",
+                    //上传前校验文件上传到第几片
+                    url: "cf.php",
+                    data: {
+                        seq: seq,
+                        fileMd5: $.md5(file.name + file.size + file.ext),
+                        fileName:file.name
+                    },
+                    dataType: "json",
+                    success: function (data) {
+                        console.log(data);
+                        chunkObj = data;
+                        chunkObj.type = data.type;
+                        chunkObj.chunk == data.chunk;
+                        msg = data.msg;
+                        if(data.type==404){
+                            deferred.reject();
+                            $("#" + file.id).find(".state").text(data.msg);
+                        }else if (data.type == 0) {
+                            deferred.reject();
+                            $("#" + file.id).find(".state").text("文件已上传");
+                        } else if (data.type == 1) {
+                            if (data.chunk) {
+                                deferred.resolve();
+                            }
+                        } else {
+                            deferred.resolve();
+                        }
+
+                    },
+                    error: function () {
+                        deferred.resolve();
+                    }
+                })
+                //deferred.resolve();
+                return deferred.promise();
+            },
+            "beforeSend": function (block) {
+                var deferred = WebUploader.Deferred();
+                var curChunk = block.chunk;
+                var totalChunk = block.chunks;
+                console.log(chunkObj)
+                if (chunkObj.type == "1") {
+                    if (curChunk < chunkObj.chunk) {
+                        deferred.reject();
+                    } else {
+                        deferred.resolve();
+                    }
+                } else {
+                    deferred.resolve();
+                }
+                return deferred.promise();
+            }
+        });
+        var uploader = WebUploader.create({
+            // 选完文件后，是否自动上传。
+            auto: false,
+            // swf文件路径
+            swf: uploadswf,
+            // 文件接收服务端。
+            server: server_url,
+            // 内部根据当前运行是创建，可能是input元素，也可能是flash.
+            pick: '#picker',
+            chunked: true,//开始分片上传
+            chunkSize:1 * 1024 * 1024,//每一片的大小
+            threads: 1,
+            formData: {
+            },
+
+            // 不压缩image, 默认如果是jpeg，文件上传前会压缩一把再上传！
+            resize: false
+        });
+
+        // 当有文件被添加进队列的时候
+        uploader.on('fileQueued', function (file) {
+
+            $list.append('<div id="' + file.id + '" class="item">' +
+                '<div class="item-file"><div class="fileType-logo"></div>' +
+                '<div class="fileMes"><h4 class="info">' + file.name + '</h4>' +
+                '<p class="state">等待上传...</p>' +
+                '</div></div></div>');
+
+        });
+        // 文件上传过程中创建进度条实时显示。
+        uploader.on('uploadProgress', function (file, percentage) {
+            var $li = $('#' + file.id),
+                $percent = $li.find('.progress .progress-bar');
+            // 避免重复创建
+            if (!$percent.length) {
+                $percent = $('<div class="progress progress-striped active">' +
+                    '<div class="progress-bar" role="progressbar" style="width: 0%">' +
+                    '</div>' +
+                    '</div>').appendTo($li).find('.progress-bar');
+            }
+            $li.find('p.state').text('上传中');
+            $percent.css('width', percentage * 100 + '%');
+        });
+        uploader.on("uploadBeforeSend", function (obj, data, headers) {
+            var file = obj.cuted.file;
+
+
+            data.test = 1;
+            data.fileMd5 = $.md5(file.name + file.size + file.ext);
+
+
+        })
+        // 文件上传成功，给item添加成功class, 用样式标记上传成功。
+        uploader.on('uploadSuccess', function (file, response) {
+            if(response.status==299){
+                $('#' + file.id).find('p.state').text('文件已存在');
+            }else{
+                $('#' + file.id).find('p.state').text('已上传');
+            }
+
+        });
+        // 文件上传失败，显示上传出错。
+        uploader.on('uploadError', function (file) {
+            $('#' + file.id).find('p.state').text(msg);
+        });
+        // 完成上传完了，成功或者失败，先删除进度条。
+        uploader.on('uploadComplete', function (file) {
+            $('#' + file.id).find('.progress').fadeOut();
+        });
+        //所有文件上传完毕
+        uploader.on("uploadFinished", function () {
+            //提交表单
+        });
+        //开始上传
+        $("#ctlBtn").click(function () {
+            uploader.upload();
+
+        });
+    });
+
+</script>
