@@ -3,7 +3,7 @@
 #检测图片是否上传过
 #
 $file = "uploads";
-$folderPath = $file."/".$_POST['fileMd5'];
+$folderPath = $file."/".$_POST['fileMd5']."/";
 $countFile = 0;
 $totalFiles = glob($folderPath . "*");
 
