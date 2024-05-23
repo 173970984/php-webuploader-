@@ -4,4 +4,4 @@ php + webuploader断点分片续传 #1 通过百度的webuploder插件 实现大
 发红包帮你调试 !! 
 qq173970984  微信 173970984
 
-电影网 www.996dyw.cn
+laravel8 + vue2 版本https://github.com/173970984/laravel8-file-slice
